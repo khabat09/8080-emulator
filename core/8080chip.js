@@ -4,7 +4,10 @@ class Machine {
         this.SP;
         this.PC = 0;
         
-        //REGUSTERS
+        //machine data stuff goes here(probably)
+        this.isRomLoaded = false;
+        
+        //REGISTERS
         this.A;
         this.B;
         this.C;
@@ -24,11 +27,20 @@ class Machine {
         this.P;
         this.C;
         this.AC;
+        
+        this.loadRom("/roms/8080EXER.COM")
     }
-    async loadRom(path){
+    async loadRom(path) {
+        this.isRomLoaded = false;
         const res = await fetch(path);
         const data = await res.arrayBuffer();
-        const bytes = Uint8Array(data);
+        const bytes = new Uint8Array(data);
+        
+        for (let i = 0; i < bytes.length; i++) {
+            this.memory[this.PC + i] = bytes[i];
+        }
+        
+        this.isRomLoaded = true;
     }
 }
 
