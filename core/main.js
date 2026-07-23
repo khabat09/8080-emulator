@@ -6,7 +6,9 @@ function anim() {
 	requestAnimationFrame(anim);
 	machine.emulate();
 }
-requestAnimationFrame(anim);
+for(let i = 0; i < 50; i++){
+	requestAnimationFrame(anim);
+}
 
 toggle.addEventListener("click", () => {
 	machine.status = !machine.status;

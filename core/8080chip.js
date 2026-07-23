@@ -12,7 +12,7 @@ class Machine {
 		this.inst = new Instruction();
 		this.status = 1;
 		this.console = document.querySelector("#console");
-		this.debugMode = 0;
+		this.debugMode = 1;
 		
 		//REGISTERS
 		this.A = 0;
@@ -120,9 +120,71 @@ class Machine {
 				break;
 			}
 			
+			case 0x06: {
+				if (this.debugMode) debugString += `MVI B, D8, B: 0x${this.B.toString(16)} = byte2: 0x${this.inst.byte2.toString(16)}`;
+				this.B = this.inst.byte2;
+				break;
+			}
+			
+			case 0x0c: {
+				if (this.debugMode) debugString += `INR C, C++; all flags are set except CY, `;
+				const res = new Uint8Array([this.C + 1])[0];
+				
+				if (res === 0) {
+					this.Z = 1;
+					if (this.debugMode) this.debugString += "Z flag is set";
+				} else {
+					this.Z = 0;
+					if (this.debugMode) this.debugString += "Z flag is unset";
+				}
+				
+				if (this.debugMode) this.debugString += " =---= ";
+				
+				if ((res >> 7) & 1 === 1) {
+					this.S = 1;
+					if (this.debugMode) this.debugString += "S flag is set";
+				} else {
+					this.S = 0;
+					if (this.debugMode) this.debugString += "S flag is unset";
+				}
+				
+				if (this.debugMode) this.debugString += " =---= ";
+				
+				const parity = this.parity(res);
+				if (parity) {
+					this.P = 1;
+					if (this.debugMode) this.debugString += "P flag is set";
+				} else {
+					this.P = 0;
+					if (this.debugMode) this.debugString += "P flag is unset";
+				}
+				
+				if (this.debugMode) this.debugString += " =---= ";
+				
+				if ((this.C & 0x0f) + 1 >= 2 ** 4) {
+					this.AC = 1;
+					if (this.debugMode) this.debugString += "AC flag is set";
+				} else {
+					this.AC = 0;
+					if (this.debugMode) this.debugString += "AC flag is unset";
+				}
+				
+				this.C = res;
+				
+				break;
+			}
+			
 			case 0x0e: {
 				if (this.debugMode) debugString += `MVI C, D8, set C: 0x${this.C.toString(16)} to byte2: 0x${this.inst.byte2.toString(16)}`
 				this.C = this.inst.byte2;
+				break;
+			}
+			
+			case 0x0f: {
+				if (this.debugMode) debugString += `RRC, set CY: 0b${this.CY.toString(16)} to bit 7 of A: 0b${this.A.toString(2)} and shift A by 1 to the left and put CY at bit 7 of A, `;
+				this.CY = (this.A & 1);
+				this.A = ((this.A >> 1) | (this.CY << 7)) & 0xff;
+				if (this.debugMode) debugString += `now: CY: 0b${this.CY.toString(2)} and A: 0b${this.A.toString(2)}`;
 				break;
 			}
 			
@@ -136,6 +198,12 @@ class Machine {
 			case 0x31: {
 				if (this.debugMode) debugString += `set SP: 0x${this.SP.toString(16)} to addr: 0x${this.inst.addr.toString(16)}, `
 				this.SP = this.inst.addr;
+				break;
+			}
+			
+			case 0x5f: {
+				if (this.debugMode) debugString += `MOV E, A, E: 0x${this.E.toString(16)} = A: 0x${this.A.toString(16)}`;
+				this.E = this.A;
 				break;
 			}
 			
@@ -503,6 +571,20 @@ class Machine {
 				this.E = this.L;
 				this.H = tmpD;
 				this.L = tmpE;
+				break;
+			}
+			
+			case 0xf1: {
+				if (this.debugMode) debugString += "POP PSW, go look your self im not explaining or debuging im just hoping for the best"
+				this.A = this.memory[this.SP + 1];
+				const flagByte = this.memory[this.SP];
+				
+				this.S = flagByte & 0b10000000;
+				this.Z = flagByte & 0b01000000;
+				this.AC = flagByte & 0b00010000;
+				this.P = flagByte & 0b00000100;
+				this.CY = flagByte & 0b00000001;
+				
 				break;
 			}
 			
