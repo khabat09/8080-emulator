@@ -1,3 +1,11 @@
-body{
+body {
     background-color: #333;
+}
+
+#console {
+    background-color: black;
+    outline: 1px solid darkblue;
+    width:70vw;
+    height: 50vh;
+    color: white;
 }
