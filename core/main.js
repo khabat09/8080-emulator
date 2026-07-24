@@ -6,10 +6,14 @@ function anim() {
 	requestAnimationFrame(anim);
 	machine.emulate();
 }
-for(let i = 0; i < 50; i++){
+for (let i = 0; i < 50; i++) {
 	requestAnimationFrame(anim);
 }
 
 toggle.addEventListener("click", () => {
 	machine.status = !machine.status;
+});
+
+LOG.addEventListener("click", () => {
+	LOGDUMP.textContent = machine.LOG;
 });
