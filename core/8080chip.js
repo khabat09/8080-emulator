@@ -37,7 +37,7 @@ class Machine {
 		this.CY = 0;
 		this.AC = 0;
 		
-		this.loadRom("");
+		this.loadRom("/roms/TST8080.COM");
 	}
 	async loadRom(path) {
 		this.isRomLoaded = false;
@@ -634,8 +634,8 @@ class Machine {
 			}
 			
 			case 0xd6: {
-				if (this.debugMode) debugString += `SUI D8, A -= byte2 (A: 0x${this.A.toString(16)} - byte2: 0x${this.inst.byte2.toString(16)}): 0x${(new Uint8Array([this.A - this.inst.byte2]))[0].toString(16)}, all flags are set, `;
 				const res = new Uint8Array([this.A - this.inst.byte2])[0];
+				if (this.debugMode) debugString += `SUI D8, A -= byte2 (A: 0x${this.A.toString(16)} - byte2: 0x${this.inst.byte2.toString(16)}): 0x${res.toString(16)}, all flags are set, `;
 				
 				if (res === 0) {
 					this.Z = 1;
@@ -686,6 +686,7 @@ class Machine {
 					if (this.debugMode) debugString += "AC flag is unset";
 				}
 				
+				this.A = res;
 				break;
 			}
 			
@@ -905,7 +906,7 @@ class Machine {
 					if (this.debugMode) debugString += "S flag is set";
 				} else {
 					this.S = 0;
-					debugString += "S flag is unset";
+					if (this.debugMode) debugString += "S flag is unset";
 				}
 				
 				if (this.debugMode) debugString += " =---= ";
