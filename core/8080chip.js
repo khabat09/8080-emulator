@@ -734,7 +734,6 @@ class Machine {
 					this.CY = 0;
 					if (this.debugMode) debugString += "CY flag is unset";
 				}
-
 				if (this.debugMode) debugString += " =---= ";
 
 				const parity = this.parity(res);
