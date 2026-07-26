@@ -95,7 +95,7 @@ class Machine {
 	}
 
 	return(){
-		this.PC = this.memory[this.SP] | (this.memory[this.SP + 1] << 8);
+		this.PC = this.memory[this.SP & 0xff] | (this.memory[(this.SP + 1) & 0xff] << 8);
 		this.SP += 2;
 	}
 	
@@ -136,6 +136,7 @@ class Machine {
 			return;
 		}
 		this.PC += this.inst.size;
+		this.PC &= 0xffff;
 		
 		let debugString = "";
 		if (this.debugMode) debugString += `opcode: 0x${this.inst.opcode.toString(16)} `;
@@ -532,9 +533,10 @@ class Machine {
 			}
 
 			case 0xc8: {
-				if (this.debugMode) debugString += `RZ, if flag Z: ${this.Z} is set do RET, put (SP): 0x${this.memory[this.SP].toString(16)} to PC.low: 0x${(this.PC & 0x00ff).toString(16)} and put SP+1: 0x${(this.memory[this.SP+1].toString(16))} to PC.hi: 0x${((this.PC & 0xff00)>>8).toString(16)} and SP += 2`;
+				if (this.debugMode) debugString += `RZ, if flag Z: ${this.Z} is set do RET, put (SP): 0x${this.memory[this.SP & 0xff].toString(16)} to PC.low: 0x${(this.PC & 0x00ff).toString(16)} and put SP+1: 0x${(this.memory[(this.SP+1) & 0xff].toString(16))} to PC.hi: 0x${((this.PC & 0xff00)>>8).toString(16)} and SP += 2, `;
 				if (this.Z){
 					this.return();
+					if(this.debugMode) debugString += `PC is now: 0x${this.PC.toString(16)}`;
 				}
 				break;
 			}

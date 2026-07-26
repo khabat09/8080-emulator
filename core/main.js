@@ -6,7 +6,7 @@ function anim() {
 	requestAnimationFrame(anim);
 	machine.emulate();
 }
-for (let i = 0; i < 1; i++) {
+for (let i = 0; i < 50; i++) {
 	requestAnimationFrame(anim);
 }
 
