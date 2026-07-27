@@ -230,6 +230,14 @@ class Machine {
 				break;
 			}
 			
+			case 0x13: {
+				if (this.debugMode) debugString += `INX D, DE: 0x${(((this.D & 0x00ff) << 8) | (this.E & 0x00ff)).toString(16)} += 1`;
+				const res = (((this.D & 0x00ff) << 8) | (this.E & 0x00ff)) + 1;
+				this.D = (res & 0xff00) >> 8;
+				this.E = (res & 0x00ff);
+				break;
+			}
+			
 			case 0x1a: {
 				const addr = ((this.D & 0x00ff) << 8) | (this.C & 0x00ff);
 				const data = this.memory[addr];
@@ -249,6 +257,14 @@ class Machine {
 				if (this.debugMode) debugString += `LXI H, D16,  set H: 0x${this.H.toString(16)} to byte3: 0x${this.inst.byte3.toString(16)}, set L: 0x${this.L.toString(16)} to byte2: 0x${this.inst.byte2.toString(16)}`;
 				this.H = this.inst.byte3;
 				this.L = this.inst.byte2;
+				break;
+			}
+			
+			case 0x23: {
+				if (this.debugMode) debugString += `INX HL, HL: 0x${(((this.H & 0x00ff) << 8) | (this.L & 0x00ff)).toString(16)} += 1`;
+				const res = (((this.H & 0x00ff) << 8) | (this.L & 0x00ff)) + 1;
+				this.H = (res & 0xff00) >> 8;
+				this.L = (res & 0x00ff);
 				break;
 			}
 			
@@ -335,6 +351,13 @@ class Machine {
 			case 0x5f: {
 				if (this.debugMode) debugString += `MOV E, A, E: 0x${this.E.toString(16)} = A: 0x${this.A.toString(16)}`;
 				this.E = this.A;
+				break;
+			}
+			
+			case 0x77: {
+				const addr = ((this.H & 0x00ff) << 8) | (this.L & 0x00ff);
+				if (this.debugMode) debugString += `MOV M,A, (HL: 0x${addr.toString(16)}): 0x${this.memory[addr].toString(16)} = A: 0x${this.A.toString(16)}`;
+				this.memory[addr] = this.A;
 				break;
 			}
 			
