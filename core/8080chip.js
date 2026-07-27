@@ -412,6 +412,11 @@ class Machine {
 				break;
 			}
 			
+			case 0x20:{
+				if(this.debugMode) debugString += "NOP PC: 0x" + this.PC.toString(16);
+				break;
+			}
+
 			case 0x21: {
 				if (this.debugMode) debugString += `LXI H, D16,  set H: 0x${this.H.toString(16)} to byte3: 0x${this.inst.byte3.toString(16)}, set L: 0x${this.L.toString(16)} to byte2: 0x${this.inst.byte2.toString(16)}`;
 				this.H = this.inst.byte3;
@@ -536,6 +541,22 @@ class Machine {
 				this.D = this.D;
 				break;
 			}
+
+			case 0x56:{
+				if(this.debugMode) debugString += `MOV D,M, D = (HL)`;
+				const addr = ((this.H) & 0xff << 8) | (this.L & 0xff);
+				const data = this[addr];
+				this.D = data;
+				break;
+			}
+
+			case 0x5e:{
+				if(this.debugMode) debugString += `MOV E,M, E = (HL)`;
+				const addr = ((this.H) & 0xff << 8) | (this.L & 0xff);
+				const data = this[addr];
+				this.E = data;
+				break;
+			}
 			
 			case 0x5f: {
 				if (this.debugMode) debugString += `MOV E, A, E: 0x${this.E.toString(16)} = A: 0x${this.A.toString(16)}`;
@@ -543,6 +564,14 @@ class Machine {
 				break;
 			}
 			
+			case 0x66:{
+				if(this.debugMode) debugString += `MOV H,M, H = (HL)`;
+				const addr = ((this.H) & 0xff << 8) | (this.L & 0xff);
+				const data = this[addr];
+				this.H = data;
+				break;
+			}
+
 			case 0x6f:{
 				if(this.debugMode) debugString += `MOV L,A`;
 				this.L = this.A;
@@ -556,6 +585,18 @@ class Machine {
 				break;
 			}
 			
+			case 0x7a:{
+				if(this.debugMode) debugString += `MOV A,D, A = D`;
+				this.A = this.D;
+				break;
+			}
+
+			case 0x7b:{
+				if(this.debugMode) debugString += `MOV A,D, A = D`;
+				this.A = this.E;
+				break;
+			}
+
 			case 0x7c: {
 				if (this.debugMode) debugString += `MV A, H, A: 0x${this.A.toString(16)} = H: 0x${this.H.toString(16)}`;
 				this.A = this.H;
@@ -613,6 +654,57 @@ class Machine {
 				this.A = res;
 				break;
 			}
+
+			case 0xa7:{
+				if(this.debugMode) debugString += `ANA A, A &= A`;
+				
+				this.CY = 0;
+
+				if(this) debugString += " =---= ";
+
+				if(this.A === 0){
+					this.Z = 1;
+				if(this) debugString += "Z flag is set";
+				}else{
+					this.Z = 0;
+					if(this) debugString += "Z flag is unset";
+
+				}
+
+				if(this) debugString += " =---= ";
+
+				if(((this.A >> 7) & 1) === 1){
+					this.S = 1;
+					if(this) debugString += "S flag is set";
+				}else{
+					this.S = 0
+					if(this) debugString += "S flag is unset";
+				}
+
+				if(this) debugString += " =---= ";
+
+				const parity = this.parity(this.A);
+				if(parity){
+					this.P = 1;
+				if(this) debugString += "P flag is set";
+				}else{
+					this.P = 0;
+				if(this) debugString += "P flag is unset";
+				}
+
+				if(this) debugString += " =---= ";
+
+				if(((this.A >> 3) & 1) === 1){
+					this.AC = 1;
+				if(this) debugString += "AC flag is set";
+				}else{
+					this.AC = 0;
+				if(this) debugString += "AC flag is unset";
+				}
+
+				break;
+			}
+
 			case 0xac: {
 				const res = this.A ^ this.H;
 				if (this.debugMode) debugString += `XRA H, A = (A: 0x${this.A.toString(16)} ^ H: 0x${this.H.toString(16)}): 0x${res.toString(16)}`;
