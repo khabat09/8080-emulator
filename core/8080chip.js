@@ -1,4 +1,5 @@
 import OPCODE_SIZES from "/core/OPCODE_SIZES.js";
+import OPCODE_CYCLES from "/core/OPCODE_CYCLES.js";
 
 class Machine {
 	constructor() {
@@ -12,11 +13,17 @@ class Machine {
 		this.isRomLoaded = false;
 		this.inst = new Instruction();
 		this.status = 1;
-		this.console = document.querySelector("#console");
-		this.debugMode = 1;
+		this.terminal = document.querySelector("#console");
+		this.debugMode = 0;
 		this.debugMemory = 0;
-		this.isInteruptEnabled = 1;
-		
+		this.isInteruptEnabled = 0;
+		this.cycles = 0;
+		this.cyclesPerSecond = 2000000;
+		this.cyclesPerFrame = this.cyclesPerSecond / 60;
+		this.cyclesPerhalfFrame = this.cyclesPerFrame / 2;
+		this.VRAM = [0x2400, 0x3fff];
+		this.shiftRegister = 0;
+
 		//REGISTERS
 		this.A = 0;
 		this.B = 0;
@@ -49,11 +56,13 @@ class Machine {
 		for (let i = 0; i < bytes.length; i++) {
 			this.memory[i + this.loadOfset] = bytes[i];
 		}
-		if (this.dumpMemory) {
+		// if (this.dumpMemory) {
 			let memCpy = [...this.memory];
-			memCpy = memCpy.map(x => x ? "0x" + x.toString(16) : "0x00")
-			console.log(JSON.stringify(memCpy));
-		}
+			// console.log(memCpy.slice(0,100));
+			
+			// memCpy = memCpy.map((i, x)=> x ? i +": 0x" + x.toString(16) : i + ": 0x00")
+			// console.log(JSON.stringify(memCpy).slice(0,100));
+		// }
 		this.isRomLoaded = true;
 	}
 	
@@ -65,7 +74,7 @@ class Machine {
 	
 	printChar() {
 		const char = String.fromCharCode(this.E);
-		this.console.textContent += char;
+		this.terminal.textContent += char;
 		this.PC = (this.memory[this.SP + 1] << 8) | this.memory[this.SP];
 		this.SP += 2;
 		console.log("printed char: ", char);
@@ -81,7 +90,7 @@ class Machine {
 			str += String.fromCharCode(char);
 			char = this.memory[addr + i];
 		}
-		this.console.textContent += str + "\n";
+		this.terminal.textContent += str + "\n";
 		this.PC = (this.memory[this.SP + 1] << 8) | this.memory[this.SP];
 		this.SP += 2;
 		console.log("printed string: ", str);
@@ -100,8 +109,28 @@ class Machine {
 	}
 	
 	emulate() {
+		if(this.cycles > 2000000){
+			this.cycles = 0;
+		}
+
+		// RST 1 addr = 1 * 8
+		if(this.cycles > this.cyclesPerhalfFrame && this.isInteruptEnabled){
+			this.call(0x08);
+			this.isInteruptEnabled = 0;
+			return;
+		}
+		// RST 2 addr = 2 * 8
+		if(this.cycles > this.cyclesPerFrame && this.isInteruptEnabled){
+			this.call(0x10);
+			this.isInteruptEnabled = 0;
+			console.log([...this.memory].slice(this.VRAM[0], this.VRAM[1]).filter(x=>x?1:0));
+			console.log("hi");
+			
+			
+			
+			return;
+		}
 		if (this.isRomLoaded && this.status) this.emulateInst();
-		
 	}
 	
 	emulateInst() {
@@ -128,7 +157,7 @@ class Machine {
 			return;
 		}
 		
-		
+		this.cycles += OPCODE_CYCLES[this.inst.opcode];
 		this.PC += this.inst.size;
 		this.PC &= 0xffff;
 		
@@ -154,10 +183,75 @@ class Machine {
 				this.memory[addr] = this.A;
 				break;
 			}
+
+			case 0x05: {
+				if(this.debugMode) debugString += `DCR B, B: 0x${this.B.toString(16)} -= 1`;
+				const res = new Uint8Array([this.B - 1])[0];
+
+				if(res === 0){
+					this.Z = 1;
+					if(this.debugMode) debugString += "Z flag is set";
+				}else{
+					this.Z = 0;
+					if(this.debugMode) debugString += "Z flag is unset";
+				}
+
+				if(this.debugMode) debugString += " =---= ";
+
+				if(((res >> 7) & 1)===1 ){
+					this.S = 1;
+					if(this.debugMode) debugString += "S flag is set";
+				}else{
+					this.S = 0;
+					if(this.debugMode) debugString += "S flag is unset";
+				}
+
+				if(this.debugMode) debugString += " =---= ";
+
+				const parity = this.parity(res);
+				if(parity){
+					this.P = 1;
+					if(this.debugMode) debugString += "P flag is set";
+				}else{
+					this.P = 0;
+					if(this.debugMode) debugString += "P flag is unset";
+				}
+
+				if (this.debugMode) debugString += " =---= ";
+
+				if((this.B & 0x0f) + (1) >= 2 ** 4){
+					this.AC = 1;
+					if(this.debugMode) debugString += "AC flag is set";
+				}else{
+					this.AC = 0;
+					if(this.debugMode) debugString += "AC flag is unset";
+				}
+
+				this.B = res;
+
+				break;
+			}
 			
 			case 0x06: {
 				if (this.debugMode) debugString += `MVI B, D8, B: 0x${this.B.toString(16)} = byte2: 0x${this.inst.byte2.toString(16)}`;
 				this.B = this.inst.byte2;
+				break;
+			}
+
+			case 0x09:{
+				if(this.debugMode) debugString += `DAD B, HL += BC`;
+				const HL = ((this.H & 0xff) << 8 ) | (this.L & 0xff);
+				const BC = ((this.B & 0xff) << 8 ) | (this.C & 0xff);
+				const res = new Uint8Array([HL + BC])[0];
+				if(HL + BC >= 2 ** 16){
+					this.CY = 1;
+					if(this.debugMode) debugString += "CY flag is set";
+				}else{
+					this.CY = 0;
+					debugString += "CY flag is unset";
+				}
+				this.H = ((res & 0xff00) >> 8);
+				this.L = (res & 0x00ff);
 				break;
 			}
 			
@@ -209,6 +303,56 @@ class Machine {
 				break;
 			}
 			
+			case 0x0d:{
+				if(this.debugMode) debugString += `DCR C, C -= 1`;
+				const res = new Uint8Array([this.C - 1])[0];
+
+				if(this.debugMode) debugString += " =---= ";
+				if(res === 0){
+					this.Z = 1;
+				if(this.debugMode) debugString += "Z flag is set";
+					
+				}else{
+					this.Z = 0;
+				if(this.debugMode) debugString += "Z flag is unset";
+				}
+
+				if(this.debugMode) debugString += " =---= ";
+
+				if(((res >> 7) & 0xf) === 1){
+					this.S = 1;
+				if(this.debugMode) debugString += "S flag is set";
+				}else{
+					this.S = 0;
+					if(this.debugMode) debugString += "S flag is unset";
+				}
+
+				if(this.debugMode) debugString += " =---= ";
+				
+				const parity = this.parity(res);
+				if(parity){
+					this.P = 1;
+					if(this.debugMode) debugString += "P flag is set";
+				}else{
+					this.P = 0;
+					if(this.debugMode) debugString += "P flag is unset";
+				}
+
+				if(this.debugMode) debugString += " =---= ";
+
+				if((this.C & 0xf) < 1){
+					this.AC = 1;
+				if(this.debugMode) debugString += "AC flag is set";
+				}else{
+					this.AC = 0;
+				if(this.debugMode) debugString += "AC flag is unset";
+				}
+
+				this.C = res;
+
+				break;
+			}
+
 			case 0x0e: {
 				if (this.debugMode) debugString += `MVI C, D8, set C: 0x${this.C.toString(16)} to byte2: 0x${this.inst.byte2.toString(16)}`
 				this.C = this.inst.byte2;
@@ -235,6 +379,21 @@ class Machine {
 				const res = (((this.D & 0x00ff) << 8) | (this.E & 0x00ff)) + 1;
 				this.D = (res & 0xff00) >> 8;
 				this.E = (res & 0x00ff);
+				break;
+			}
+
+			case 0x19:{
+				if(this.debugMode) debugString += `DAD D HL += DE`;
+				const HL = ((this.H & 0xff) << 8 ) | (this.L & 0xff);
+				const DE = ((this.D & 0xff) << 8 ) | (this.E & 0xff);
+				const res = new Uint8Array([HL + DE])[0];
+				if(HL + DE >= 2 ** 16){
+					this.CY = 1;
+					if(this.debugMode) debugString += "CY flag is set";
+				}else{
+					this.CY = 0;
+					if(this.debugMode) debugString += "CY flag is unset";
+				}
 				break;
 			}
 			
@@ -268,6 +427,29 @@ class Machine {
 				break;
 			}
 			
+			case 0x26:{
+				if(this.debugMode) debugString += `MVI H,D8, L: 0x${this.L.toString(16)} = byte2: 0x${this.inst.byte2.toString(16)}`;
+				this.L = this.inst.byte2;
+				break;
+			}
+
+			case 0x29:{
+				if(this.debugMode) debugString += `DAD H, HL += HL, only set CY flag`;
+				const HL = ((this.H & 0xff) << 8) | (this.L & 0xff);
+				const res = new Uint8Array([HL + HL])[0];
+				if(HL + HL >= 2**16){
+					this.CY = 1;
+					if(this.debugMode) debugString += "CY flag is set";
+				}else{
+					this.CY = 0;
+					if(this.debugMode) debugString += "CY flag is unset";
+				}
+
+				this.H = (HL & 0xff00) << 8;
+				this.L = HL & 0x00ff;
+				break;
+			}
+
 			case 0x2a: {
 				const data1 = this.memory[this.inst.addr];
 				const data2 = this.memory[this.inst.addr + 1];
@@ -286,6 +468,13 @@ class Machine {
 			case 0x32: {
 				if (this.debugMode) debugString += `STA addr, (addr: 0x${this.inst.addr.toString(16)}): ${this.memory[this.inst.addr].toString(16)} = A: 0x${this.A.toString(16)}`;
 				this.memory[this.inst.addr] = this.A;
+				break;
+			}
+
+			case 0x36: {
+				const addr = ((this.H & 0x00ff) >> 8) | (this.L & 0x00ff);
+				if(this.debugMode) debugString += `MVI M, D8, (HL: 0x${(addr).toString(16)}): 0x${this.memory[addr].toString(16)} = byte2: 0x${this.inst.byte2.toString(16)}`;
+				this.memory[addr] = this.inst.byte2;
 				break;
 			}
 			
@@ -354,6 +543,12 @@ class Machine {
 				break;
 			}
 			
+			case 0x6f:{
+				if(this.debugMode) debugString += `MOV L,A`;
+				this.L = this.A;
+				break;
+			}
+
 			case 0x77: {
 				const addr = ((this.H & 0x00ff) << 8) | (this.L & 0x00ff);
 				if (this.debugMode) debugString += `MOV M,A, (HL: 0x${addr.toString(16)}): 0x${this.memory[addr].toString(16)} = A: 0x${this.A.toString(16)}`;
@@ -464,7 +659,16 @@ class Machine {
 				if (this.debugMode) debugString += `RNZ, if Z: ${this.Z} is NOT set do pop pc from stack and change PC: 0x${this.PC.toString(16)} to (SP): 0x${this.memory[this.SP].toString(16)} and (SP+1): 0x${this.memory[this.SP+1].toString(16)}`;
 				if (this.Z === 0) {
 					this.return();
+					this.cycles += 6;
 				}
+				break;
+			}
+
+			case 0xc1:{
+				if(this.debugMode) debugString += `POP B, C = (SP) and B =(SP+1) and SP += 2`;
+				this.C = this.memory[this.SP];
+				this.B = this.memory[this.SP + 1];
+				this.SP += 2;
 				break;
 			}
 			
@@ -487,6 +691,7 @@ class Machine {
 				if (this.debugMode) debugString += `CNZ addr, if flag NOT Z: ${this.Z} do push pc and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)} `;
 				if (this.Z === 0) {
 					this.call(this.inst.addr)
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -563,6 +768,7 @@ class Machine {
 				if (this.Z) {
 					this.return();
 					if (this.debugMode) debugString += `PC is now: 0x${this.PC.toString(16)}`;
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -591,7 +797,8 @@ class Machine {
 					this.memory[this.SP - 2] = (this.PC & 0xff);
 					this.SP -= 2;
 					this.PC = this.inst.addr;
-					if (this.debugMode) debugString += `did: pushed PC and set PC to addr`
+					if (this.debugMode) debugString += `did: pushed PC and set PC to addr`;
+					this.cycles += 6;
 				}
 				else if (this.debugMode) debugString += "did: nothing, Z is not set";
 				
@@ -673,6 +880,7 @@ class Machine {
 				if (this.debugMode) debugString += `RNC, if CY: ${this.CY} is NOT set do pop pc from stack and change PC: 0x${this.PC.toString(16)} to (SP): 0x${this.memory[this.SP].toString(16)} and (SP+1): 0x${this.memory[this.SP+1].toString(16)}`;
 				if (this.CY === 0) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -702,6 +910,12 @@ class Machine {
 				break;
 			}
 			
+			case 0xd3:{
+				if(this.debugMode) debugString += `OUT D8, port 2 special, set shift register to byte2`;
+				this.shiftRegister = this.inst.byte2;
+				break;
+			}
+
 			case 0xd4: {
 				if (this.debugMode) debugString += `CNC addr, if CY: ${this.CY} is NOT set do push pc and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)} `;
 				if (this.CY === 0) {
@@ -709,6 +923,7 @@ class Machine {
 					this.memory[this.SP - 2] = (this.PC & 0xff);
 					this.SP -= 2;
 					this.PC = this.inst.addr;
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -774,6 +989,7 @@ class Machine {
 				if (this.debugMode) debugString += `RC, if CY: ${this.CY} is set do pop pc from stack and change PC: 0x${this.PC.toString(16)} to (SP): 0x${this.memory[this.SP].toString(16)} and (SP+1): 0x${this.memory[this.SP+1].toString(16)} and SP += 2 `;
 				if (this.CY === 1) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -794,6 +1010,7 @@ class Machine {
 					this.memory[this.SP - 2] = this.PC & 0x00ff;
 					this.SP -= 2;
 					this.PC = this.inst.addr;
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -859,6 +1076,7 @@ class Machine {
 				if (this.debugMode) debugString += `RPO, if P: ${this.P} flag is unset do pop pc from stack and change PC: 0x${this.PC.toString(16)} to (SP): 0x${this.memory[this.SP].toString(16)} and (SP+1): 0x${this.memory[this.SP+1].toString(16)} and SP += 2 `;
 				if (this.P === 0) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -884,6 +1102,7 @@ class Machine {
 				if (this.debugMode) debugString += `CPO addr, if P: ${this.P} flag is unset call addr: 0x${this.inst.addr.toString(16)}, push PC.hi: 0x${this.PC.toString(16)} to sp-1 and PC.lo: 0x${this.PC.toString(16)} to sp-2 and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)}`;
 				if (this.P === 0) {
 					this.call(this.inst.addr)
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -952,6 +1171,7 @@ class Machine {
 				if (this.debugMode) debugString += `RPE, if P: ${this.P} flag is set do pop pc from stack and change PC: 0x${this.PC.toString(16)} to (SP): 0x${this.memory[this.SP].toString(16)} and (SP+1): 0x${this.memory[this.SP+1].toString(16)} and SP += 2 `;
 				if (this.P === 1) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -980,6 +1200,7 @@ class Machine {
 				if (this.debugMode) debugString += `CPE addr, if P: ${this.P} flag is set do push pc and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)} `;
 				if (this.P === 1) {
 					this.call(this.inst.addr);
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -1030,6 +1251,7 @@ class Machine {
 				if (this.debugMode) debugString += `RP addr, jump to addr: 0x${this.inst.addr.toString(16)} if S: ${this.S} is unset, `;
 				if (this.S === 0) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -1067,11 +1289,9 @@ class Machine {
 			case 0xf4: {
 				if (this.debugMode) debugString += `CP addr, if flag P: ${this.P} do push pc and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)} =---= `;
 				if (this.P) {
-					this.memory[this.SP - 1] = (this.PC && 0xff00) >> 8;
-					this.memory[this.SP - 2] = (this.PC && 0x00ff);
-					this.SP -= 2;
-					this.PC = this.inst.addr;
-					if (this.debugMode) debugString += `did: pushed PC and set PC to addr`
+					this.call(this.inst.addr);
+					if (this.debugMode) debugString += `did: pushed PC and set PC to addr`;
+					this.cycles += 6;
 				}
 				if (this.debugMode) debugString += "did: nothing, P is not set";
 				break;
@@ -1142,6 +1362,7 @@ class Machine {
 				if (this.debugMode) debugString += `RM addr, jump to addr: 0x${this.inst.addr.toString(16)} if S: ${this.S} is set, `;
 				if (this.S === 1) {
 					this.return();
+					this.cycles += 6;
 				}
 				break;
 			}
@@ -1165,6 +1386,7 @@ class Machine {
 			case 0xfb: {
 				if (this.debugMode) debugString += "EI, Enable interupts";
 				this.isInteruptEnabled = 1;
+				console.log("interupts are on")
 				break;
 			}
 			
@@ -1172,6 +1394,7 @@ class Machine {
 				if (this.debugMode) debugString += `CM addr, if S: ${this.S} do push pc and change PC: 0x${this.PC.toString(16)} to addr: 0x${this.inst.addr.toString(16)}`;
 				if (this.S === 1) {
 					this.call(this.inst.addr)
+					this.cycles += 6;
 				}
 				break;
 			}
